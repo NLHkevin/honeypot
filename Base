@@ -7,9 +7,11 @@
 #include <thread>
 #include <random>
 #include <vector>
+#include <map>
 #include <regex>
 #include <algorithm>
 #include <numeric>
+#include <set>
 
 void logCredentials(const char* username, const char* password) {
     std::ofstream logFile("honeypot_log.txt", std::ios::app);
@@ -20,13 +22,14 @@ void logCredentials(const char* username, const char* password) {
         logFile << "Password: " << password << std::endl;
         logFile.close();
     } else {
-        throw std::runtime_error("Failed to open log file.");
+        throw std::runtime_error("Failed to open log file: honeypot_log.txt");
     }
 }
 
 bool isStrongPassword(const char* password) {
-    // Minimum password length requirement
-    if (std::strlen(password) < 8) {
+    // Minimum and maximum password length requirement
+    size_t passwordLength = std::strlen(password);
+    if (passwordLength < 8 || passwordLength > 32) {
         return false;
     }
 
@@ -78,8 +81,8 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
         auto passwordIterator = attempt.find("password");
 
         if (usernameIterator != attempt.end() && passwordIterator != attempt.end()) {
-            std::string username = usernameIterator->second;
-            std::string password = passwordIterator->second;
+            const std::string& username = usernameIterator->second;
+            const std::string& password = passwordIterator->second;
 
             if (!std::regex_match(username, usernamePattern) || !std::regex_match(password, passwordPattern)) {
                 std::cout << "Warning: Non-standard characters used in username or password!" << std::endl;
@@ -95,8 +98,8 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
         auto passwordIterator = attempt.find("password");
 
         if (usernameIterator != attempt.end() && passwordIterator != attempt.end()) {
-            std::string username = usernameIterator->second;
-            std::string password = passwordIterator->second;
+            const std::string& username = usernameIterator->second;
+            const std::string& password = passwordIterator->second;
 
             for (const auto& vector : commonAttackVectors) {
                 if (username.find(vector) != std::string::npos || password.find(vector) != std::string::npos) {
@@ -115,72 +118,57 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
 
     std::sort(loginTimes.begin(), loginTimes.end());
 
+    std::vector<double> timeDiffsHere's the continuation of the improved code:
+
+```cpp
     std::vector<double> timeDiffs;
     for (size_t i = 1; i < loginTimes.size(); ++i) {
-        double diff = std::chrono::duration<double>(loginTimes[i] - loginTimes[i - 1]).count();
-        timeDiffs.push_back(diff);
+        std::chrono::duration<double> diff = loginTimes[i] - loginTimes[i - 1];
+        timeDiffs.push_back(diff.count());
     }
 
     double averageTimeDiff = std::accumulate(timeDiffs.begin(), timeDiffs.end(), 0.0) / timeDiffs.size();
-    std::cout << "Average time between login attempts: " << averageTimeDiff << " seconds" << std::endl;
+    std::cout << "Average time difference between login attempts: " << averageTimeDiff << " seconds" << std::endl;
 
-    // Analyze unique usernames and passwords
-    std::set<std::string> uniqueUsernames;
-    std::set<std::string> uniquePasswords;
+    // Identify unusual time differences
+    std::set<double> uniqueDiffs(timeDiffs.begin(), timeDiffs.end());
+    if (uniqueDiffs.size() > 1) {
+        std::cout << "Warning: Unusual time differences detected!" << std::endl;
+    }
+}
 
+int main() {
+    std::vector<std::map<std::string, std::string>> loginAttempts;
+
+    // Simulated login attempts
+    std::map<std::string, std::string> attempt1 = {{"username", "admin"}, {"password", "password123"}};
+    std::map<std::string, std::string> attempt2 = {{"username", "user1"}, {"password", "P@ssw0rd"}};
+    std::map<std::string, std::string> attempt3 = {{"username", "hacker"}, {"password", "admin@123"}};
+
+    loginAttempts.push_back(attempt1);
+    loginAttempts.push_back(attempt2);
+    loginAttempts.push_back(attempt3);
+
+    // Log credentials and analyze attacks
     for (const auto& attempt : loginAttempts) {
         auto usernameIterator = attempt.find("username");
         auto passwordIterator = attempt.find("password");
 
         if (usernameIterator != attempt.end() && passwordIterator != attempt.end()) {
-            uniqueUsernames.insert(usernameIterator->second);
-            uniquePasswords.insert(passwordIterator->second);
+            const char* username = usernameIterator->second.c_str();
+            const char* password = passwordIterator->second.c_str();
+
+            logCredentials(username, password);
+
+            if (!isStrongPassword(password)) {
+                std::cout << "Warning: Weak password detected!" << std::endl;
+            }
         }
+
+        simulateDelay();
     }
 
-    std::cout << "Unique usernames: " << uniqueUsernames.size() << std::endl;
-    std::cout << "Unique passwords: " << uniquePasswords.size() << std::endl;
-
-    // Additional analysis logic can be added here
-}
-
-int main() {
-    // Create a dummy login page for the honeypot
-    std::vector<std::map<std::string, std::string>> loginAttempts;
-
-    // Prompt the attacker to enter a username
-    std::string username;
-    std::cout << "Enter your username: ";
-    std::getline(std::cin, username);
-
-    // Prompt the attacker to enter a password
-    std::string password;
-    std::cout << "Enter your password: ";
-    std::getline(std::cin, password);
-
-    // Log the entered credentials to a map and add it to the login attempts vector
-    std::map<std::string, std::string> credentials;
-    credentials["username"] = username;
-    credentials["password"] = password;
-    loginAttempts.push_back(credentials);
-
-    // Simulate delay to make the login process appear more realistic
-    simulateDelay();
-
-    // Analyze the logged credentials to gain insights
     analyzeAttack(loginAttempts);
-
-    // Simulate different login scenarios based on credentials
-    if (username == "admin" && password == "password") {
-        std::cout << "Logging in as admin..." << std::endl;
-        // Additional actions for successful login as admin
-    } else if (!isStrongPassword(password)) {
-        std::cout << "Invalid username or weak password. Login failed." << std::endl;
-        // Additional actions for weak password
-    } else {
-        std::cout << "Invalid username or password. Login failed." << std::endl;
-        // Additional actions for failed login
-    }
 
     return 0;
 }
