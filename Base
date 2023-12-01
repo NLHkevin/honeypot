@@ -1,19 +1,19 @@
-#include <iostream>
-#include <fstream>
+#include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <ctime>
-#include <cstdlib>
-#include <chrono>
-#include <thread>
-#include <random>
-#include <vector>
+#include <fstream>
+#include <iostream>
 #include <map>
-#include <regex>
-#include <algorithm>
 #include <numeric>
+#include <random>
+#include <regex>
 #include <set>
+#include <string>
+#include <thread>
+#include <vector>
 
-void logCredentials(const char* username, const char* password) {
+void logCredentials(const std::string& username, const std::string& password) {
     std::ofstream logFile("honeypot_log.txt", std::ios::app);
     if (logFile.is_open()) {
         std::time_t now = std::time(nullptr);
@@ -26,53 +26,19 @@ void logCredentials(const char* username, const char* password) {
     }
 }
 
-bool isStrongPassword(const char* password) {
-    // Minimum and maximum password length requirement
-    size_t passwordLength = std::strlen(password);
-    if (passwordLength < 8 || passwordLength > 32) {
-        return false;
-    }
-
-    bool hasUppercase = false;
-    bool hasLowercase = false;
-    bool hasSpecialChar = false;
-    bool hasDigit = false;
-
-    // Check each character of the password
-    for (const char* p = password; *p != '\0'; ++p) {
-        // Check for uppercase letters
-        if (std::isupper(*p)) {
-            hasUppercase = true;
-        }
-        // Check for lowercase letters
-        else if (std::islower(*p)) {
-            hasLowercase = true;
-        }
-        // Check for special characters
-        else if (!std::isalnum(*p)) {
-            hasSpecialChar = true;
-        }
-        // Check for digits
-        else if (std::isdigit(*p)) {
-            hasDigit = true;
-        }
-    }
-
-    // Verify if all the required criteria are met
-    return hasUppercase && hasLowercase && hasSpecialChar && hasDigit;
+bool isStrongPassword(const std::string& password) {
+    std::regex passwordPattern("^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[@#$%^&+=])[A-Za-z0-9@#$%^&+=]{8,32}$");
+    return std::regex_match(password, passwordPattern);
 }
 
 void simulateDelay() {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(1000, 3000);
-    int delayTime = dis(gen);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(delayTime));
+    std::this_thread::sleep_for(std::chrono::milliseconds(dis(gen)));
 }
 
 void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginAttempts) {
-    // Check for patterns in login attempts
     std::regex usernamePattern("^[A-Za-z0-9_-]+$");
     std::regex passwordPattern("^[A-Za-z0-9@#$%^&+=]+$");
 
@@ -90,7 +56,6 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
         }
     }
 
-    // Identify common attack vectors
     std::vector<std::string> commonAttackVectors = {"SQL injection", "Cross-site scripting (XSS)", "Brute-force attack"};
 
     for (const auto& attempt : loginAttempts) {
@@ -109,18 +74,14 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
         }
     }
 
-    // Analyze timing and frequency
     std::vector<std::chrono::time_point<std::chrono::system_clock>> loginTimes;
     for (const auto& attempt : loginAttempts) {
-        std::chrono::time_point<std::chrono::system_clock> timestamp = std::chrono::system_clock::now(); // Replace this with actual timestamp retrieval
+        std::chrono::time_point<std::chrono::system_clock> timestamp = std::chrono::system_clock::now();
         loginTimes.push_back(timestamp);
     }
 
     std::sort(loginTimes.begin(), loginTimes.end());
 
-    std::vector<double> timeDiffsHere's the continuation of the improved code:
-
-```cpp
     std::vector<double> timeDiffs;
     for (size_t i = 1; i < loginTimes.size(); ++i) {
         std::chrono::duration<double> diff = loginTimes[i] - loginTimes[i - 1];
@@ -130,39 +91,30 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
     double averageTimeDiff = std::accumulate(timeDiffs.begin(), timeDiffs.end(), 0.0) / timeDiffs.size();
     std::cout << "Average time difference between login attempts: " << averageTimeDiff << " seconds" << std::endl;
 
-    // Identify unusual time differences
-    std::set<double> uniqueDiffs(timeDiffs.begin(), timeDiffs.end());
+    std::set<double> uniqueDiffs(timeDiffs.begin(), timeDiffs.end())  
     if (uniqueDiffs.size() > 1) {
         std::cout << "Warning: Unusual time differences detected!" << std::endl;
     }
 }
 
 int main() {
-    std::vector<std::map<std::string, std::string>> loginAttempts;
+    std::vector<std::map<std::string, std::string>> loginAttempts = {
+        {{"username", "admin"}, {"password", "password123"}},
+        {{"username", "user1"}, {"password", "P@ssw0rd"}},
+        {{"username", "hacker"}, {"password", "adminApologies for the incomplete response. Here's the continuation of the code:
 
-    // Simulated login attempts
-    std::map<std::string, std::string> attempt1 = {{"username", "admin"}, {"password", "password123"}};
-    std::map<std::string, std::string> attempt2 = {{"username", "user1"}, {"password", "P@ssw0rd"}};
-    std::map<std::string, std::string> attempt3 = {{"username", "hacker"}, {"password", "admin@123"}};
+```cpp
+@123"}}
+    };
 
-    loginAttempts.push_back(attempt1);
-    loginAttempts.push_back(attempt2);
-    loginAttempts.push_back(attempt3);
-
-    // Log credentials and analyze attacks
     for (const auto& attempt : loginAttempts) {
-        auto usernameIterator = attempt.find("username");
-        auto passwordIterator = attempt.find("password");
+        const std::string& username = attempt.at("username");
+        const std::string& password = attempt.at("password");
 
-        if (usernameIterator != attempt.end() && passwordIterator != attempt.end()) {
-            const char* username = usernameIterator->second.c_str();
-            const char* password = passwordIterator->second.c_str();
+        logCredentials(username, password);
 
-            logCredentials(username, password);
-
-            if (!isStrongPassword(password)) {
-                std::cout << "Warning: Weak password detected!" << std::endl;
-            }
+        if (!isStrongPassword(password)) {
+            std::cout << "Warning: Weak password detected!" << std::endl;
         }
 
         simulateDelay();
