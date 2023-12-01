@@ -15,7 +15,10 @@ void logCredentials(const char* username, const char* password) {
 std::ofstream logFile("honeypot_log.txt", std::ios::app);
 if (logFile.is_open()) {
 std::time_t now = std::time(nullptr);
-logFile << "Timestamp: " << std::asctime(std::localtime(&now));
+std::tm* timeinfo = std::localtime(&now);
+char timestamp[80];
+std::strftime(timestamp, sizeof(timestamp), "Timestamp: %Y-%m-%d %H:%M:%S", timeinfo);
+logFile << timestamp << std::endl;
 logFile << "Username: " << username << std::endl;
 logFile << "Password: " << password << std::endl;
 logFile.close();
@@ -47,7 +50,7 @@ for (const char* p = password; *p != '\0'; ++p) {
         hasLowercase = true;
     }
     // Check for special characters
-    else if (!std::isalnum(*p)) {
+    else if (std::isalnum(*p)) {
         hasSpecialChar = true;
     }
 }
