@@ -12,63 +12,60 @@
 #include <numeric>
 
 void logCredentials(const char* username, const char* password) {
-std::ofstream logFile("honeypot_log.txt", std::ios::app);
-if (logFile.is_open()) {
-std::time_t now = std::time(nullptr);
-std::tm* timeinfo = std::localtime(&now);
-char timestamp[80];
-std::strftime(timestamp, sizeof(timestamp), "Timestamp: %Y-%m-%d %H:%M:%S", timeinfo);
-logFile << timestamp << std::endl;
-logFile << "Username: " << username << std::endl;
-logFile << "Password: " << password << std::endl;
-logFile.close();
-} else {
-std::cerr << "Failed to open log file." << std::endl;
-}
+    std::ofstream logFile("honeypot_log.txt", std::ios::app);
+    if (logFile.is_open()) {
+        std::time_t now = std::time(nullptr);
+        logFile << "Timestamp: " << std::asctime(std::localtime(&now));
+        logFile << "Username: " << username << std::endl;
+        logFile << "Password: " << password << std::endl;
+        logFile.close();
+    } else {
+        throw std::runtime_error("Failed to open log file.");
+    }
 }
 
 bool isStrongPassword(const char* password) {
-// Minimum password length requirement
-if (std::strlen(password) < 8) {
-return false;
-}
-
-cpp
-Copy
-bool hasUppercase = false;
-bool hasLowercase = false;
-bool hasSpecialChar = false;
-
-// Check each character of the password
-for (const char* p = password; *p != '\0'; ++p) {
-    // Check for uppercase letters
-    if (std::isupper(*p)) {
-        hasUppercase = true;
+    // Minimum password length requirement
+    if (std::strlen(password) < 8) {
+        return false;
     }
-    // Check for lowercase letters
-    else if (std::islower(*p)) {
-        hasLowercase = true;
-    }
-    // Check for special characters
-    else if (std::isalnum(*p)) {
-        hasSpecialChar = true;
-    }
-}
 
-// Verify if all the required criteria are met
-return hasUppercase && hasLowercase && hasSpecialChar;
+    bool hasUppercase = false;
+    bool hasLowercase = false;
+    bool hasSpecialChar = false;
+    bool hasDigit = false;
+
+    // Check each character of the password
+    for (const char* p = password; *p != '\0'; ++p) {
+        // Check for uppercase letters
+        if (std::isupper(*p)) {
+            hasUppercase = true;
+        }
+        // Check for lowercase letters
+        else if (std::islower(*p)) {
+            hasLowercase = true;
+        }
+        // Check for special characters
+        else if (!std::isalnum(*p)) {
+            hasSpecialChar = true;
+        }
+        // Check for digits
+        else if (std::isdigit(*p)) {
+            hasDigit = true;
+        }
+    }
+
+    // Verify if all the required criteria are met
+    return hasUppercase && hasLowercase && hasSpecialChar && hasDigit;
 }
 
 void simulateDelay() {
-// Simulate a delay before displaying the login result
-std::random_device rd;
-std::mt19937 gen(rd());
-std::uniform_int_distribution<> dis(1000, 3000);
-int delayTime = dis(gen);
-std::cout << "Please wait while we verify your credentials..." << std::endl;
-std::cout << "Simulating delay of " << delayTime << " milliseconds..." << std::endl;
-std::cout << std::endl;
-std::this_thread::sleep_for(std::chrono::milliseconds(delayTime));
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(1000, 3000);
+    int delayTime = dis(gen);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(delayTime));
 }
 
 void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginAttempts) {
