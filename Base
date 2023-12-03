@@ -16,7 +16,7 @@
 #include <sstream>
 #include <iomanip>
 
-#include <bcrypt/BCrypt.hpp> // You'll need to install and include the bcrypt library
+#include <bcrypt/BCrypt.hpp> // need to install and include the bcrypt library
 
 // Logging library
 #include <spdlog/spdlog.h>
