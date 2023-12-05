@@ -24,7 +24,7 @@
 // Initialize the logger
 auto logger = spdlog::stdout_logger_mt("logger");
 
-void logCredentials(const char* username, const char* password) {
+void logCredentials(const std::string& username, const std::string& password) {
     std::ofstream logFile("honeypot_log.txt", std::ios::app);
     if (logFile.is_open()) {
         std::time_t now = std::time(nullptr);
@@ -40,9 +40,9 @@ void logCredentials(const char* username, const char* password) {
     }
 }
 
-bool isStrongPassword(const char* password) {
+bool isStrongPassword(const std::string& password) {
     // Minimum and maximum password length requirement
-    size_t passwordLength = std::strlen(password);
+    size_t passwordLength = password.length();
     if (passwordLength < 8 || passwordLength > 32) {
         return false;
     }
@@ -53,21 +53,21 @@ bool isStrongPassword(const char* password) {
     bool hasDigit = false;
 
     // Check each character of the password
-    for (const char* p = password; *p != '\0'; ++p) {
+    for (char c : password) {
         // Check for uppercase letters
-        if (std::isupper(*p)) {
+        if (std::isupper(c)) {
             hasUppercase = true;
         }
         // Check for lowercase letters
-        else if (std::islower(*p)) {
+        else if (std::islower(c)) {
             hasLowercase = true;
         }
         // Check for special characters
-        else if (!std::isalnum(*p)) {
+        else if (!std::isalnum(c)) {
             hasSpecialChar = true;
         }
         // Check for digits
-        else if (std::isdigit(*p)) {
+        else if (std::isdigit(c)) {
             hasDigit = true;
         }
     }
