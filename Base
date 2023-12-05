@@ -24,6 +24,7 @@
 // Initialize the logger
 auto logger = spdlog::stdout_logger_mt("logger");
 
+// Function to log the username and password in a file
 void logCredentials(const std::string& username, const std::string& password) {
     std::ofstream logFile("honeypot_log.txt", std::ios::app);
     if (logFile.is_open()) {
@@ -40,6 +41,7 @@ void logCredentials(const std::string& username, const std::string& password) {
     }
 }
 
+// Function to check if a password meets the strength requirements
 bool isStrongPassword(const std::string& password) {
     // Minimum and maximum password length requirement
     size_t passwordLength = password.length();
@@ -76,6 +78,7 @@ bool isStrongPassword(const std::string& password) {
     return hasUppercase && hasLowercase && hasSpecialChar && hasDigit;
 }
 
+// Function to simulate a delay between login attempts
 void simulateDelay() {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -85,6 +88,7 @@ void simulateDelay() {
     std::this_thread::sleep_for(std::chrono::milliseconds(delayTime));
 }
 
+// Function to analyze the login attempts for possible attacks
 void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginAttempts) {
     // Check for patterns in login attempts
     std::regex usernamePattern("^[A-Za-z0-9_-]+$");
