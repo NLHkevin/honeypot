@@ -21,6 +21,9 @@
 // Logging library
 #include <spdlog/spdlog.h>
 
+// Initialize the logger
+auto logger = spdlog::stdout_logger_mt("logger");
+
 void logCredentials(const char* username, const char* password) {
     std::ofstream logFile("honeypot_log.txt", std::ios::app);
     if (logFile.is_open()) {
@@ -96,7 +99,7 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
             const std::string& password = passwordIterator->second;
 
             if (!std::regex_match(username, usernamePattern) || !std::regex_match(password, passwordPattern)) {
-                spdlog::warn("Non-standard characters used in username or password!");
+                logger->warn("Non-standard characters used in username or password!");
             }
         }
     }
@@ -114,7 +117,7 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
 
             for (const auto& vector : commonAttackVectors) {
                 if (username.find(vector) != std::string::npos || password.find(vector) != std::string::npos) {
-                    spdlog::warn("Possible {} detected in login attempt!", vector);
+                    logger->warn("Possible {} detected in login attempt!", vector);
                 }
             }
         }
@@ -123,74 +126,84 @@ void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginA
     // Analyze timing and frequency
     std::vector<std::chrono::time_point<std::chrono::system_clock>> loginTimes;
     for (const auto& attempt : loginAttempts) {
-        std::chrono::time_point<std::chrono::system_clock> timestamp= std::chrono::system_clock::from_time_t(std::stoi(attempt["timestamp"]));
-        loginTimes.push_back(timestamp);
+        auto timeIterator = attempt.find("time");
+        if (timeIterator != attempt.end()) {
+            std::tm tm = {};
+            std::istringstream ss(timeIterator->second);
+            ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+            auto loginTime = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+            loginTimes.push_back(loginTime);
+        }
     }
 
     // Sort login times in ascending order
     std::sort(loginTimes.begin(), loginTimes.end());
 
-    // Calculate time differences between login attempts
-    std::vector<double> timeDifferences;
+    // Calculate time intervals between login attempts
+    std::vector<std::chrono::duration<double>> timeIntervals;
     for (size_t i = 1; i < loginTimes.size(); ++i) {
-        std::chrono::duration<double> diff = loginTimes[i] - loginTimes[i - 1];
-        timeDifferences.push_back(diff.count());
+        auto duration = loginTimes[i] - loginTimes[i - 1];
+        timeIntervals.push_back(duration);
     }
 
-    if (!timeDifferences.empty()) {
-        // Calculate average time difference
-        double averageTimeDifference = std::accumulate(timeDifferences.begin(), timeDifferences.end(), 0.0) / timeDifferences.size();
+    // Calculate average time interval
+    double averageInterval = 0.0;
+    if (!timeIntervals.empty()) {
+        averageInterval = std::accumulate(timeIntervals.begin(), timeIntervals.end(), 0.0).count() / timeIntervals.size();
+    }
 
-        // Calculate standard deviation of time differences
-        double sumOfSquaredDifferences = std::inner_product(timeDifferences.begin(), timeDifferences.end(), timeDifferences.begin(), 0.0);
-        double variance = sumOfSquaredDifferences / timeDifferences.size() - averageTimeDifference * averageTimeDifference;
-        double standardDeviation = std::sqrt(variance);
-
-        if (standardDeviation > 1.0) {
-            spdlog::warn("Possible coordinated attack detected! Average time difference: {}s, Standard deviation: {}", averageTimeDifference, standardDeviation);
-        }
+    // Analyze average interval and detect possible automated attacks
+    if (averageInterval <= 1.0) {
+        logger->warn("Possible automated attack detected!");
     }
 }
 
 int main() {
-    // Initialize the logger
-    spdlog::set_level(spdlog::level::info);
-    spdlog::set_pattern("[%H:%M:%S] [%l] %v");
+    // Set the log level to show warnings and errors
+    spdlog::set_level(spdlog::level::warn);
 
-    // Simulate login attempts
-    std::vector<std::map<std::string, std::string>> loginAttempts = {
-        {{"username", "admin"}, {"password", "password123"}},
-        {{"username", "guest"}, {"password", "guest123"}},
-        {{"username", "admin"}, {"password", "password"}},
-        {{"username", "admin"}, {"password", "admin"}},
-        {{"username", "guest"}, {"password", "guest"}},
-        {{"username", "admin"}, {"password", "123456"}},
-        {{"username", "admin"}, {"password", "admin123"}},
-        {{"username", "admin"}, {"password", "admin123"}},
-        {{"username", "guest"}, {"password", "password123"}},
-        {{"username", "admin"}, {"password", "admin123"}},
-        {{"username", "admin"}, {"password", "guest123"}},
-        {{"username", "admin"}, {"password", "admin"}}
-    };
+    std::vector<std::map<std::string, std::string>> loginAttempts;
 
-    for (const auto& attempt : loginAttempts) {
-        const char* username = attempt.at("username").c_str();
-        const char* password = attempt.at("password").c_str();
+    // Simulate multiple login attempts
+    for (int i = 0; i < 10; ++i) {
+        std::map<std::string, std::string> attempt;
+        attempt["username"] = "user" + std::to_string(i);
+        attempt["password"] = "password" + std::to_string(i);
+        attempt["time"] = "2022-01-01 12:00:00";
 
-        if (!isStrongPassword(password)) {
-            spdlog::warn("Weak password detected for username: {}", username);
-        }
-
-        try {
-            std::string hashedPassword = BCrypt::generateHash(password);
-            logCredentials(username, hashedPassword.c_str());
-        } catch (const std::exception& e) {
-            spdlog::error("Failed to log credentials: {}", e.what());
-        }
-
-        simulateDelay();
+        loginAttempts.push_back(attempt);
     }
 
+    // Log each login attempt
+    for (const auto& attempt : loginAttempts) {
+        auto usernameIterator = attempt.find("username");
+        auto passwordIterator = attempt.find("password");
+
+        if (usernameIterator != attempt.end() && passwordIterator != attempt.end()) {
+            const std::string& username = usernameIterator->second;
+            const std::string& password = passwordIterator->second;
+
+            try {
+                // Hash the password using bcrypt library
+                std::string hashedPassword = BCrypt::generateHash(password);
+
+                // Log the username and hashed password
+                logCredentials(username.c_str(), hashedPassword.c_str());
+
+                // Check password strength
+                if (!isStrongPassword(password.c_str())) {
+                    logger->warn("Weak password detected for user: {}", username);
+                }
+            } catch (const std::exception& e) {
+                logger->error("Error logging credentials: {}", e.what());
+            }
+        }
+    }
+
+    // Simulate delay between login attempts
+    simulateDelay();
+
+    // Analyze login attempts for possible attacks
     analyzeAttack(loginAttempts);
 
     return 0;
