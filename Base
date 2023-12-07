@@ -1,217 +1,108 @@
 #include <iostream>
 #include <fstream>
-#include <cstring>
+#include <string>
 #include <ctime>
-#include <cstdlib>
-#include <chrono>
-#include <thread>
-#include <random>
-#include <vector>
-#include <map>
-#include <regex>
-#include <algorithm>
-#include <numeric>
-#include <set>
-#include <stdexcept>
-#include <sstream>
-#include <iomanip>
-
-#include <bcrypt/BCrypt.hpp> // need to install and include the bcrypt library
-
-// Logging library
+#include <openssl/sha.h>
 #include <spdlog/spdlog.h>
 
-// Initialize the logger
-auto logger = spdlog::stdout_logger_mt("logger");
-
-// Function to log the username and password hash in a file
-void logCredentials(const std::string& username, const std::string& passwordHash) {
-    std::ofstream logFile("honeypot_log.txt", std::ios::app);
-    if (logFile.is_open()) {
-        std::time_t now = std::time(nullptr);
-        std::stringstream timestamp;
-        timestamp << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S");
-
-        logFile << "Timestamp: " << timestamp.str() << std::endl;
-        logFile << "Username: " << username << std::endl;
-        logFile << "Password hash: " << passwordHash << std::endl;
-        logFile.close();
-    } else {
-        throw std::runtime_error("Failed to open log file: honeypot_log.txt");
-    }
-}
-
-// Function to check if a password meets the strength requirements
-bool isStrongPassword(const std::string& password, size_t minLength = 8, size_t maxLength = 32, bool requireUppercase = true, bool requireLowercase = true, bool requireSpecialChar = true, bool requireDigit = true) {
-    // Password length requirement
-    size_t passwordLength = password.length();
-    if (passwordLength < minLength || passwordLength > maxLength) {
+// Function to check password strength
+bool isStrongPassword(const std::string& password) {
+    // Check password length
+    if (password.length() < 8) {
         return false;
     }
 
-    bool hasUppercase = !requireUppercase;
-    bool hasLowercase = !requireLowercase;
-    bool hasSpecialChar = !requireSpecialChar;
-    bool hasDigit = !requireDigit;
-
-    // Check each character of the password
-    for (char c : password) {
-        // Check for uppercase letters
-        if (std::isupper(c)) {
+    // Check for at least one uppercase letter
+    bool hasUppercase = false;
+    for (char ch : password) {
+        if (std::isupper(ch)) {
             hasUppercase = true;
+            break;
         }
-        // Check for lowercase letters
-        else if (std::islower(c)) {
-            hasLowercase = true;
-        }
-        // Check for special characters
-        else if (!std::isalnum(c)) {
-            hasSpecialChar = true;
-        }
-        // Check for digits
-        else if (std::isdigit(c)) {
+    }
+
+    if (!hasUppercase) {
+        return false;
+    }
+
+    // Check for at least one digit
+    bool hasDigit = false;
+    for (char ch : password) {
+        if (std::isdigit(ch)) {
             hasDigit = true;
+            break;
         }
     }
 
-    // Verify if all the required criteria are met
-    return (!requireUppercase || hasUppercase) &&
-           (!requireLowercase || hasLowercase) &&
-           (!requireSpecialChar || hasSpecialChar) &&
-           (!requireDigit || hasDigit);
-}
-
-// Function to simulate a delay between login attempts
-void simulateDelay() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(1000, 3000);
-    int delayTime = dis(gen);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(delayTime));
-}
-
-// Function to analyze the login attempts for possible attacks
-void analyzeAttack(const std::vector<std::map<std::string, std::string>>& loginAttempts) {
-    // Check for patterns in login attempts
-    std::regex usernamePattern("^[A-Za-z0-9_-]+$");
-    std::regex passwordPattern("^[A-Za-z0-9@#$%^&+=]+$");
-
-    for (const auto& attempt : loginAttempts) {
-        auto usernameIterator = attempt.find("username");
-        auto passwordIterator = attempt.find("password");
-
-        if (usernameIterator != attempt.end() && passwordIterator != attempt.end()) {
-            const std::string& username = usernameIterator->second;
-            const std::string& password = passwordIterator->second;
-
-            if (!std::regex_match(username, usernamePattern) || !std::regex_match(password, passwordPattern)) {
-                logger->warn("Non-standard characters used in username or password!");
-            }
-        }
+    if (!hasDigit) {
+        return false;
     }
 
-    // Identify common attack vectors
-    std::vector<std::string> commonAttackVectors = {"SQL injection", "Cross-site scripting (XSS)", "Brute-force attack"};
-
-    for (const auto& attempt : loginAttempts) {
-        auto usernameIterator = attempt.find("username");
-        auto passwordIterator = attempt.find("password");
-
-        if (usernameIterator != attempt.end() && passwordIterator != attempt.end()) {
-            const std::string& username = usernameIterator->second;
-            const std::string& password = passwordIterator->second;
-
-            for (const auto& vector : commonAttackVectors) {
-                if (username.find(vector) != std::string::npos || password.find(vector) != std::string::npos) {
-                    logger->warn("Possible {} detected in login attempt!", vector);
-                }
-            }
-        }
-    }
-
-    // Analyze timing and frequency
-    std::vector<std::chrono::time_point<std::chrono::system_clock>> loginTimes;
-    for (const auto& attempt : loginAttempts) {
-        auto timeIterator = attempt.find("time");
-        if (timeIterator != attempt.end()) {
-            std::tm tm = {};
-            std::istringstream ss(timeIterator->second);
-            ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
-            auto loginTime = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-            loginTimes.push_back(loginTime);
-        }
-    }
-
-    // Sort login times in ascending order
-    std::sort(loginTimes.begin(), loginTimes.end());
-
-    // Calculate time intervals between login attempts
-    std::vector<std::chrono::duration<double>> timeIntervals;
-    for (size_t i = 1; i < loginTimes.size(); ++i) {
-        auto duration = loginTimes[i] - loginTimes[i - 1];
-        timeIntervals.push_back(duration);
-    }
-
-    // Calculate average time interval
-    double averageInterval = 0.0;
-    if (!timeIntervals.empty()) {
-        averageInterval = std::accumulate(timeIntervals.begin(), timeIntervals.end(), 0.0).count() / timeIntervals.size();
-    }
-
-    // Analyze average interval and detect possible automated attacks
-    if (averageInterval <= 1.0) {
-        logger->warn("Possible automated attack detected!");
-    }
+    return true;
 }
 
 int main() {
-    // Set the log level to show warnings and errors
-    spdlog::set_level(spdlog::level::warn);
+    // Initialize logger
+    spdlog::set_level(spdlog::level::info);
+    spdlog::info("Honeypot program started.");
 
-    std::vector<std::map<std::string, std::string>> loginAttempts;
+    // Log file name
+    std::string logFile = "honeypot_log.txt";
 
-    // Simulate multiple login attempts
-    for (int i = 0; i < 10; ++i) {
-        std::map<std::string, std::string> attempt;
-        attempt["username"] = "user" + std::to_string(i);
-        attempt["password"] = "password" + std::to_string(i);
-        attempt["time"] = "2022-01-01 12:00:00";
-
-        loginAttempts.push_back(attempt);
+    // Open log file
+    std::ofstream logStream(logFile, std::ios::app);
+    if (!logStream.is_open()) {
+        spdlog::error("Failed to open log file: {}", logFile);
+        return 1;
     }
 
-    // Log each login attempt
-    for (const auto& attempt : loginAttempts) {
-        auto usernameIterator = attempt.find("username");
-        auto passwordIterator = attempt.find("password");
+    // Get current time
+    std::time_t now = std::time(nullptr);
+    std::tm* timeinfo = std::localtime(&now);
+    char timeBuffer[80];
+    std::strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeinfo);
 
-        if (usernameIterator != attempt.end() && passwordIterator != attempt.end()) {
-            const std::string& username = usernameIterator->second;
-            const std::string& password = passwordIterator->second;
+    // Prompt for username
+    std::string username;
+    std::cout << "Enter username: ";
+    std::cin >> username;
 
-            try {
-                // Hash the password using bcrypt library
-                std::string hashedPassword = BCrypt::generateHash(password);
+    // Prompt for password
+    std::string password;
+    std::cout << "Enter password: ";
+    std::cin >> password;
 
-                // Log the username and hashed password
-                logCredentials(username.c_str(), hashedPassword.c_str());
+    // Hash the password
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*)password.c_str(), password.length(), hash);
 
-                // Check password strength
-                if (!isStrongPassword(password.c_str())) {
-                    logger->warn("Weak password detected for user: {}", username);
-                }
-            } catch (const std::exception& e) {
-                logger->error("Error logging credentials: {}", e.what());
-            }
-        }
+    // Convert hash to string
+    std::stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+    std::string passwordHash = ss.str();
+
+    // Log the login attempt
+    logStream << "Time: " << timeBuffer << " | Username: " << username << " | Password Hash: " << passwordHash << std::endl;
+    logStream.close();
+
+    // Check password strength
+    if (isStrongPassword(password)) {
+        spdlog::info("Strong password provided.");
+    } else {
+        spdlog::warn("Weak password provided.");
     }
 
-    // Simulate delay between login attempts
-    simulateDelay();
+    // Simulate delay
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    // Analyze login attempts for possible attacks
-    analyzeAttack(loginAttempts);
+    // Analyze login attempts
+    // ...
 
+    // Check rate limit
+    // ...
+
+    spdlog::info("Honeypot program completed.");
     return 0;
 }
