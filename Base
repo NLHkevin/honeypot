@@ -24,8 +24,8 @@
 // Initialize the logger
 auto logger = spdlog::stdout_logger_mt("logger");
 
-// Function to log the username and password in a file
-void logCredentials(const std::string& username, const std::string& password) {
+// Function to log the username and password hash in a file
+void logCredentials(const std::string& username, const std::string& passwordHash) {
     std::ofstream logFile("honeypot_log.txt", std::ios::app);
     if (logFile.is_open()) {
         std::time_t now = std::time(nullptr);
@@ -34,7 +34,7 @@ void logCredentials(const std::string& username, const std::string& password) {
 
         logFile << "Timestamp: " << timestamp.str() << std::endl;
         logFile << "Username: " << username << std::endl;
-        logFile << "Password: [hashed]" << std::endl;
+        logFile << "Password hash: " << passwordHash << std::endl;
         logFile.close();
     } else {
         throw std::runtime_error("Failed to open log file: honeypot_log.txt");
@@ -42,17 +42,17 @@ void logCredentials(const std::string& username, const std::string& password) {
 }
 
 // Function to check if a password meets the strength requirements
-bool isStrongPassword(const std::string& password) {
-    // Minimum and maximum password length requirement
+bool isStrongPassword(const std::string& password, size_t minLength = 8, size_t maxLength = 32, bool requireUppercase = true, bool requireLowercase = true, bool requireSpecialChar = true, bool requireDigit = true) {
+    // Password length requirement
     size_t passwordLength = password.length();
-    if (passwordLength < 8 || passwordLength > 32) {
+    if (passwordLength < minLength || passwordLength > maxLength) {
         return false;
     }
 
-    bool hasUppercase = false;
-    bool hasLowercase = false;
-    bool hasSpecialChar = false;
-    bool hasDigit = false;
+    bool hasUppercase = !requireUppercase;
+    bool hasLowercase = !requireLowercase;
+    bool hasSpecialChar = !requireSpecialChar;
+    bool hasDigit = !requireDigit;
 
     // Check each character of the password
     for (char c : password) {
@@ -75,7 +75,10 @@ bool isStrongPassword(const std::string& password) {
     }
 
     // Verify if all the required criteria are met
-    return hasUppercase && hasLowercase && hasSpecialChar && hasDigit;
+    return (!requireUppercase || hasUppercase) &&
+           (!requireLowercase || hasLowercase) &&
+           (!requireSpecialChar || hasSpecialChar) &&
+           (!requireDigit || hasDigit);
 }
 
 // Function to simulate a delay between login attempts
