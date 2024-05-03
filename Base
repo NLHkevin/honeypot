@@ -2,23 +2,21 @@
 #include <fstream>
 #include <string>
 #include <ctime>
+#include <openssl/sha.h>
+#include <spdlog/spdlog.h>
+#include <random>
 #include <chrono>
 #include <iomanip>
 #include <sstream>
-#include <thread>
 #include <vector>
-#include <regex>
-#include <bcrypt/BCrypt.hpp>
-#include <spdlog/spdlog.h>
 
-// Function to check password strength
-bool isStrongPassword(const std::string& password) {
-    // Check password length
+std::vector<std::time_t> loginAttempts;
+
+bool maybestrongpsw(const std::string& password) {
     if (password.length() < 8) {
         return false;
     }
 
-    // Check for at least one uppercase letter
     bool hasUppercase = false;
     for (char ch : password) {
         if (std::isupper(ch)) {
@@ -31,27 +29,24 @@ bool isStrongPassword(const std::string& password) {
         return false;
     }
 
-    // Check for at least one digit
-    bool hasDigit = false;
+    bool has1Digit = false;
     for (char ch : password) {
         if (std::isdigit(ch)) {
-            hasDigit = true;
+            has1Digit = true;
             break;
         }
     }
 
-    if (!hasDigit) {
+    if (!has1Digit) {
         return false;
     }
 
     return true;
 }
 
-// Function to generate a random honeytoken
 std::string generateHoneytoken() {
     std::string honeytoken = "honeytoken";
 
-    // Generate a random suffix for the honeytoken
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(1000, 9999);
@@ -61,34 +56,30 @@ std::string generateHoneytoken() {
     return honeytoken;
 }
 
-// Function to verify the captcha
 bool verifyCaptcha() {
     std::string captcha;
-    std::cout << "Please enter the captcha: ";
+    std::cout << "Enter the captcha: ";
     std::cin >> captcha;
 
-    // Compare the captcha with the expected value
     std::string expectedCaptcha = "ABC123";
     return captcha == expectedCaptcha;
 }
 
-// Function to check the rate limit based on the given IP address, maximum attempts, and time window
-bool checkRateLimit(const std::string& ipAddress, int maxAttempts, int timeWindow, const std::vector<std::string>& loginAttempts) {
-    // Implement the logic to check the rate limit here
+bool checkRateLimit(const std::string& ipAddress, int maxAttempts, int timeWindow) {
+    std::time_t currentTime = std::time(nullptr);
+    std::time_t timeWindowStart = currentTime - timeWindow;
+
     int count = 0;
-    for (const std::string& attempt : loginAttempts) {
-        if (attempt == ipAddress) {
+    for (const std::time_t& attemptTime : loginAttempts) {
+        if (attemptTime >= timeWindowStart && attemptTime <= currentTime && attemptTime != 0) {
             count++;
         }
     }
 
-    // Return true if the rate limit is not exceeded, false otherwise
     return count < maxAttempts;
 }
 
-// Function to analyze login attempts for possible attacks
 void analyzeAttack(const std::vector<std::string>& loginAttempts) {
-    // Implement the logic to analyze login attempts here
     spdlog::info("Analyzing login attempts...");
     for (const std::string& attempt : loginAttempts) {
         spdlog::info("Login attempt: {}", attempt);
@@ -96,92 +87,54 @@ void analyzeAttack(const std::vector<std::string>& loginAttempts) {
 }
 
 int main() {
-    // Initialize logger
     spdlog::set_level(spdlog::level::info);
     spdlog::info("Honeypot program started.");
 
-    // Log file name
     std::string logFile = "honeypot_log.txt";
-
-    // Open log file
     std::ofstream logStream(logFile, std::ios::app);
     if (!logStream.is_open()) {
         spdlog::error("Failed to open log file: {}", logFile);
         return 1;
     }
 
-    // Get current time
     std::time_t now = std::time(nullptr);
     std::tm* timeinfo = std::localtime(&now);
     char timeBuffer[80];
     std::strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeinfo);
 
-    // Prompt for username
     std::string username;
     std::cout << "Enter username: ";
     std::cin >> username;
 
-    // Generate a honeytoken
     std::string honeytoken = generateHoneytoken();
 
-    // Prompt for password
     std::string password;
     std::cout << "Enter password: ";
     std::cin >> password;
 
-    // Validate username and password inputs
-    std::regex usernameRegex(R"([A-Za-z0-9]+)");
-    std::regex passwordRegex(R"([A-Za-z0-9!@#$%^&*()]+)");
-    if (!std::regex_match(username, usernameRegex) || !std::regex_match(password, passwordRegex)) {
-        spdlog::error("Invalid username or password format.");
-        logStream.close();
-        return 1;
-    }
-
-    // Verify the captcha
     if (!verifyCaptcha()) {
         spdlog::error("Captcha verification failed. Possible bot attack.");
         logStream.close();
         return 1;
     }
 
-   Here's the continuation of the code:
+    unsigned char hash[SHA512_DIGEST_LENGTH];
+    SHA512_CTX sha512;
+    SHA512_Init(&sha512);
+    SHA512_Update(&sha512, password.c_str(), password.length());
+    SHA512_Final(hash, &sha512);
 
-    // Check rate limit
-    std::string ipAddress = "127.0.0.1"; // Replace with actual IP address
-    int maxAttempts = 3; // Maximum number of attempts allowed
-    int timeWindow = 60; // Time window in seconds
-    std::vector<std::string> loginAttempts; // Keep track of login attempts
-    if (!checkRateLimit(ipAddress, maxAttempts, timeWindow, loginAttempts)) {
-        spdlog::error("Rate limit exceeded. Possible brute-force attack.");
-        logStream.close();
-        return 1;
+    std::stringstream ss;
+    for (int i = 0; i < SHA512_DIGEST_LENGTH; ++i) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
     }
+    std::string passwordHash = ss.str();
 
-    // Check password strength
-    if (!isStrongPassword(password)) {
-        spdlog::error("Weak password detected. Possible dictionary attack.");
-        logStream.close();
-        return 1;
-    }
+    loginAttempts.push_back(std::time(nullptr));
 
-    // Hash the password
-    std::string hashedPassword = BCrypt::generateHash(password);
-
-    // Log the login attempt
-    std::ostringstream logMsg;
-    logMsg << "Time: " << timeBuffer << ", Username: " << username << ", Honeytoken: " << honeytoken << ", IP Address: " << ipAddress;
-    spdlog::info(logMsg.str());
-    logStream << logMsg.str() << std::endl;
-
-    // Update the login attempts
-    loginAttempts.push_back(ipAddress);
-
-    // Analyze login attempts for possible attacks
-    if (loginAttempts.size() >= maxAttempts) {
-        analyzeAttack(loginAttempts);
-    }
+    logStream << "Time: " << timeBuffer << ", Username: " << username << ", Password Hash: " << passwordHash << std::endl;
 
     logStream.close();
+
     return 0;
 }
